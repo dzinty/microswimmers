@@ -178,7 +178,7 @@ def plot_state(coords):
 
     plt.show()
 
-def plot_dist(sol, threshold, bins):
+def plot_dist(sol, N, threshold, bins):
     dist = distance_matrix(sol[-1, :, :],sol[-1,:,:])
     ds = dist[np.triu_indices(N, k = 1)]
     ds_short = [d for d in ds if d < threshold]
