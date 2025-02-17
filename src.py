@@ -99,7 +99,7 @@ def get_interaction(Rs, epsilon):
                     if dist[i,j] > 1.113:
                         f = force(dist[i,j], epsilon, sigma_part)
                     else:
-                        f = 1e4 * epsilon
+                        f = force(1.113, epsilon, sigma_part)
                     F[i] += f * (Rs[i] - Rs[inds[i, j]]) / dist[i,j]
     return F
 
