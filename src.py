@@ -89,18 +89,26 @@ def get_wall_force(poses):
 
 @njit
 def get_interaction(Rs, epsilon):
-    search = KDTree(Rs)
+    Rs_search = Rs.copy()
+    Rs_plus = Rs[Rs[:,2]<=3]
+    Rs_minus = Rs[Rs[:,2]>=197]
+    if Rs_plus.size != 0:
+        Rs_plus[:,2] += 200
+        Rs_search  = np.concatenate((Rs_search, Rs_plus), axis = 0)
+    if Rs_minus.size != 0:
+        Rs_minus[:,2] -= 200
+        Rs_search = np.concatenate((Rs_minus, Rs_search), axis = 0)
+    search = KDTree(Rs_search)
     dist, inds, nn = search.query(Rs, k = 13, distance_upper_bound = 3 * sigma_part)
     F = np.zeros_like(Rs)
     if epsilon != 0:
         for i in range(Rs.shape[0]):
             for j in range(13):
                 if inds[i, j] != -1 and dist[i, j] > 0:
-                    if dist[i,j] > 1.113:
-                        f = force(dist[i,j], epsilon, sigma_part)
-                    else:
-                        f = force(1.113, epsilon, sigma_part)
-                    F[i] += f * (Rs[i] - Rs[inds[i, j]]) / dist[i,j]
+                    f = force(dist[i,j], epsilon, sigma_part)
+                    if f > 200:
+                        f = 200
+                    F[i] += f * (Rs[i] - Rs_search[inds[i, j]]) / dist[i,j]
     return F
 
 def dot(ps, Rs, t, beta, A, B, omega, epsilon, k, v0):
