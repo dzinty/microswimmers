@@ -95,18 +95,41 @@ def dot(ps, Rs, t, beta, A, B, omega, k, v0):
     #print(f'in dot: {R_dot}')
     return p_dot, R_dot
 
+def rotate(ps, Thetas):
+    """Rotate each unit vector ps[i] by the rotation vector Thetas[i] (Rodrigues formula).
+
+    Unlike p + dp followed by normalisation, this keeps |p| = 1 exactly and does not
+    shrink the component of p along the rotation axis.
+    """
+    angle = np.linalg.norm(Thetas, axis = 1)
+    safe = np.where(angle > 0, angle, 1.0)
+    axis = (Thetas.T / safe).T
+    cos = np.cos(angle)
+    sin = np.sin(angle)
+    along = np.sum(axis * ps, axis = 1)
+    new = (ps.T * cos).T + (np.cross(axis, ps).T * sin).T + (axis.T * (along * (1 - cos))).T
+    return (new.T / np.linalg.norm(new, axis = 1)).T
+
 def euler(ps, Rs, params, k, dot, dt, t = 0, noise = True):    
     dpdt, dRdt = dot(ps, Rs, t, beta, *params, k, v0)
-    dps_d = dpdt * dt
     dRs_d = dRdt * dt
+    # Orientation: p_dot = W x p with the angular velocity W = (p x k) / (2 beta) + omega / 2
+    # (gravitational torque plus half the vorticity; dot() returns exactly this W x p).
+    # p is rotated about W by |W| dt.  Adding p_dot * dt and normalising instead moves p
+    # along a great circle, which for a rotation about a fixed axis shrinks the component
+    # along that axis: d(cos theta)/dt = -(A^2 dt / 2) sin^2(theta) cos(theta).
+    omega = params[2]
+    Thetas = (np.cross(ps, k) / (2 * beta) + omega / 2) * dt
     if not noise:
         #print(f'in Euler: {dRs_d}')
-        return ((ps + dps_d).T/np.linalg.norm(ps + dps_d, axis = 1)).T, Rs + dRs_d
+        return rotate(ps, Thetas), Rs + dRs_d
     nT = np.random.normal(0, sigma0, Rs.shape)
     nR = np.random.normal(0, sigma0, ps.shape)
     dRs_s = np.sqrt(2 * D_T * dt) * nT
-    dps_s = - 2 * D_R * dt * ps + np.sqrt(2 * D_R * dt) * np.cross(nR, ps)
-    return ((ps + dps_d + dps_s).T/np.linalg.norm(ps + dps_d + dps_s, axis = 1)).T, Rs + dRs_d + dRs_s
+    # Rotational noise as a random rotation; the drift -2 D_R dt p of the old update
+    # is contained in the exact rotation and must not be added separately.
+    Thetas = Thetas + np.sqrt(2 * D_R * dt) * nR
+    return rotate(ps, Thetas), Rs + dRs_d + dRs_s
 
 def solver(Omega, k, new, N, p0s, R0s, dt, steps, file, noise = False):
     params = get_params(Omega)
